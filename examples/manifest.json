@@ -1,0 +1,54 @@
+{
+  "schema_version": "gooo.semantic.bisect/v1",
+  "source": {
+    "repository": "https://github.com/example/semantic-source",
+    "tag": {
+      "name": "v0.1.0",
+      "object": "1111111111111111111111111111111111111111",
+      "target": "2222222222222222222222222222222222222222"
+    },
+    "release": {
+      "id": 9001,
+      "tag_name": "v0.1.0",
+      "immutable": true,
+      "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    "asset": {
+      "name": "manifest.json",
+      "size": 17,
+      "digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+    }
+  },
+  "inventory_exact": 3,
+  "known_good": "c0",
+  "known_refuted": "c2",
+  "candidates": [
+    {
+      "id": "c0",
+      "ordinal": 0,
+      "release_id": 1000,
+      "tag": {"name": "candidate-0", "object": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "target": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+      "asset": {"name": "semantic.json", "size": 30, "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"},
+      "state_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "claim_digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    },
+    {
+      "id": "c1",
+      "ordinal": 1,
+      "release_id": 1001,
+      "tag": {"name": "candidate-1", "object": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "target": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+      "asset": {"name": "semantic.json", "size": 31, "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"},
+      "state_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "claim_digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    },
+    {
+      "id": "c2",
+      "ordinal": 2,
+      "release_id": 1002,
+      "tag": {"name": "candidate-2", "object": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "target": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+      "asset": {"name": "semantic.json", "size": 32, "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"},
+      "state_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "claim_digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    }
+  ]
+}

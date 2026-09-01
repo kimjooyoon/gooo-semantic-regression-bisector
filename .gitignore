@@ -1,0 +1,6 @@
+/output/
+/dist/
+/ci-artifacts/
+/work/
+*.tmp
+*.log

@@ -1,0 +1,81 @@
+name: Immutable v0.1.0 release
+
+on:
+  workflow_run:
+    workflows: [Post-main verification]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: v0.1.0
+      MAIN_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Check out verified main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.x'
+          cache: true
+      - name: Build release asset
+        run: |
+          mkdir -p dist
+          go build -trimpath -o dist/gooo-semantic-regression-bisector ./cmd/gooo-semantic-regression-bisector
+          sha256sum dist/gooo-semantic-regression-bisector > dist/SHA256SUMS
+      - name: Create annotated tag object and ref
+        run: |
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${VERSION}" >/dev/null 2>&1; then
+            test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${VERSION}" --jq '.object.type')" = tag
+          else
+            tag_sha="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/tags" \
+              -f "tag=${VERSION}" \
+              -f "message=Immutable ${VERSION} semantic bisector release" \
+              -f "object=${MAIN_SHA}" \
+              -f 'type=commit' --jq '.sha')"
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f "ref=refs/tags/${VERSION}" -f "sha=${tag_sha}"
+          fi
+      - name: Create draft release
+        run: |
+          if ! gh release view "$VERSION" >/dev/null 2>&1; then
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/releases" \
+              -f "tag_name=${VERSION}" \
+              -f 'name=gooo semantic regression bisector v0.1.0' \
+              -f 'body=Immutable semantic regression bisector release.' \
+              -F draft=true -F prerelease=false >/dev/null
+          fi
+      - name: Upload assets to draft
+        run: gh release upload "$VERSION" dist/gooo-semantic-regression-bisector dist/SHA256SUMS
+      - name: Publish release
+        run: |
+          release_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${VERSION}" --jq '.id')"
+          gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${release_id}" -F draft=false >/dev/null
+      - name: Verify public tag, release immutability, and exact assets
+        run: |
+          ref_json="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${VERSION}")"
+          test "$(jq -r '.object.type' <<<"$ref_json")" = tag
+          tag_sha="$(jq -r '.object.sha' <<<"$ref_json")"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_sha}" --jq '.object.sha')" = "$MAIN_SHA"
+          release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${VERSION}")"
+          test "$(jq -r '.tag_name' <<<"$release_json")" = "$VERSION"
+          test "$(jq -r '.draft' <<<"$release_json")" = false
+          test "$(jq -r '.immutable' <<<"$release_json")" = true
+          for asset in dist/gooo-semantic-regression-bisector dist/SHA256SUMS; do
+            name="$(basename "$asset")"
+            expected_size="$(stat -c '%s' "$asset")"
+            expected_digest="sha256:$(sha256sum "$asset" | awk '{print $1}')"
+            actual_size="$(jq -r --arg name "$name" '.assets[] | select(.name == $name) | .size' <<<"$release_json")"
+            actual_digest="$(jq -r --arg name "$name" '.assets[] | select(.name == $name) | .digest' <<<"$release_json")"
+            test "$actual_size" = "$expected_size"
+            test "$actual_digest" = "$expected_digest"
+          done
