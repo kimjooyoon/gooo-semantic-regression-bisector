@@ -28,7 +28,7 @@ run_stage() {
 }
 
 run_stage compile bash -c 'go generate ./... && go test ./... -run "^$" -count=1'
-run_stage build bash -c 'go_files="$(rg --files -g "*.go")"; test -z "$(gofmt -l $go_files)"; go vet ./...; go build ./...'
+run_stage build bash -c 'go_files="$(find . -type f -name "*.go" -not -path "./.git/*")"; test -z "$(gofmt -l $go_files)"; go vet ./...; go build ./...'
 run_stage test go test -json ./... -count=1
 run_stage conformance go test -json ./internal/conformance -run TestConformance -count=1
 run_stage integration go test -json ./internal/conformance -run TestIntegrationOutputsExactlySixCallerOwnedFiles -count=1

@@ -4,7 +4,7 @@ set -euo pipefail
 output_dir="${1:?output directory is required}"
 summary="$output_dir/test-summary.json"
 json_logs=("$output_dir/test.log" "$output_dir/conformance.log" "$output_dir/integration.log")
-total_functions="$(rg -n '^func Test[[:alnum:]_]+\(' --glob '*_test.go' | wc -l | tr -d ' ')"
+total_functions="$(find . -type f -name '*_test.go' -not -path './.git/*' -exec grep -h -E '^func Test[[:alnum:]_]+\(' {} + | wc -l | tr -d ' ')"
 canonical_cases=9
 total=$((total_functions + canonical_cases))
 selected="$total"
