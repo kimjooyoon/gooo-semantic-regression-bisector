@@ -27,11 +27,6 @@ jobs:
         with:
           go-version: '1.27.x'
           cache: true
-      - name: Build release asset
-        run: |
-          mkdir -p dist
-          go build -trimpath -o dist/gooo-semantic-regression-bisector ./cmd/gooo-semantic-regression-bisector
-          sha256sum dist/gooo-semantic-regression-bisector > dist/SHA256SUMS
       - name: Create annotated tag object and ref
         run: |
           if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${VERSION}" >/dev/null 2>&1; then
@@ -45,6 +40,25 @@ jobs:
             gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
               -f "ref=refs/tags/${VERSION}" -f "sha=${tag_sha}"
           fi
+      - name: Resolve release target without changing public history
+        run: |
+          ref_json="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${VERSION}")"
+          test "$(jq -r '.object.type' <<<"$ref_json")" = tag
+          tag_sha="$(jq -r '.object.sha' <<<"$ref_json")"
+          release_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_sha}" --jq '.object.sha')"
+          test -n "$release_sha"
+          if ! gh run list --workflow post-main.yml --status success --limit 100 --json headSha --jq '.[].headSha' | grep -Fx "$release_sha" >/dev/null; then
+            echo "tag target ${release_sha} has no successful post-main verification" >&2
+            exit 1
+          fi
+          echo "RELEASE_SHA=${release_sha}" >> "$GITHUB_ENV"
+          git fetch --no-tags origin "$release_sha" --depth=1
+          git checkout --detach "$release_sha"
+      - name: Build release asset from resolved release target
+        run: |
+          mkdir -p dist
+          go build -trimpath -o dist/gooo-semantic-regression-bisector ./cmd/gooo-semantic-regression-bisector
+          sha256sum dist/gooo-semantic-regression-bisector > dist/SHA256SUMS
       - name: Create draft release
         run: |
           if published="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${VERSION}" 2>/dev/null)"; then
@@ -85,7 +99,7 @@ jobs:
           ref_json="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${VERSION}")"
           test "$(jq -r '.object.type' <<<"$ref_json")" = tag
           tag_sha="$(jq -r '.object.sha' <<<"$ref_json")"
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_sha}" --jq '.object.sha')" = "$MAIN_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_sha}" --jq '.object.sha')" = "$RELEASE_SHA"
           release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${VERSION}")"
           test "$(jq -r '.tag_name' <<<"$release_json")" = "$VERSION"
           test "$(jq -r '.draft' <<<"$release_json")" = false
