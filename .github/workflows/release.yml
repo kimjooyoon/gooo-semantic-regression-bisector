@@ -47,19 +47,39 @@ jobs:
           fi
       - name: Create draft release
         run: |
-          if ! gh release view "$VERSION" >/dev/null 2>&1; then
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/releases" \
+          if published="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${VERSION}" 2>/dev/null)"; then
+            test "$(jq -r '.immutable' <<<"$published")" = true
+            echo 'RELEASE_ALREADY_PUBLISHED=true' >> "$GITHUB_ENV"
+            exit 0
+          fi
+          release_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases" --paginate --jq ".[] | select(.tag_name == \"${VERSION}\") | .id" | head -n 1 || true)"
+          if [ -z "$release_id" ]; then
+            release_id="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/releases" \
               -f "tag_name=${VERSION}" \
               -f 'name=gooo semantic regression bisector v0.1.0' \
               -f 'body=Immutable semantic regression bisector release.' \
-              -F draft=true -F prerelease=false >/dev/null
+              -F draft=true -F prerelease=false --jq '.id')"
           fi
+          echo "RELEASE_ID=${release_id}" >> "$GITHUB_ENV"
       - name: Upload assets to draft
-        run: gh release upload "$VERSION" dist/gooo-semantic-regression-bisector dist/SHA256SUMS
+        run: |
+          if [ "${RELEASE_ALREADY_PUBLISHED:-false}" = true ]; then
+            exit 0
+          fi
+          release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}")"
+          for asset in dist/gooo-semantic-regression-bisector dist/SHA256SUMS; do
+            name="$(basename "$asset")"
+            if jq -e --arg name "$name" '.assets[]? | select(.name == $name)' <<<"$release_json" >/dev/null; then
+              continue
+            fi
+            gh release upload "$VERSION" "$asset"
+          done
       - name: Publish release
         run: |
-          release_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${VERSION}" --jq '.id')"
-          gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${release_id}" -F draft=false >/dev/null
+          if [ "${RELEASE_ALREADY_PUBLISHED:-false}" = true ]; then
+            exit 0
+          fi
+          gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" -F draft=false >/dev/null
       - name: Verify public tag, release immutability, and exact assets
         run: |
           ref_json="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${VERSION}")"
