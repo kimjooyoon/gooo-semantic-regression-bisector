@@ -27,11 +27,6 @@ jobs:
         with:
           go-version: '1.27.x'
           cache: true
-      - name: Build release asset
-        run: |
-          mkdir -p dist
-          go build -trimpath -o dist/gooo-semantic-regression-bisector ./cmd/gooo-semantic-regression-bisector
-          sha256sum dist/gooo-semantic-regression-bisector > dist/SHA256SUMS
       - name: Create annotated tag object and ref
         run: |
           if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${VERSION}" >/dev/null 2>&1; then
@@ -45,27 +40,66 @@ jobs:
             gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
               -f "ref=refs/tags/${VERSION}" -f "sha=${tag_sha}"
           fi
+      - name: Resolve release target without changing public history
+        run: |
+          ref_json="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${VERSION}")"
+          test "$(jq -r '.object.type' <<<"$ref_json")" = tag
+          tag_sha="$(jq -r '.object.sha' <<<"$ref_json")"
+          release_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_sha}" --jq '.object.sha')"
+          test -n "$release_sha"
+          if ! gh run list --workflow post-main.yml --status success --limit 100 --json headSha --jq '.[].headSha' | grep -Fx "$release_sha" >/dev/null; then
+            echo "tag target ${release_sha} has no successful post-main verification" >&2
+            exit 1
+          fi
+          echo "RELEASE_SHA=${release_sha}" >> "$GITHUB_ENV"
+          git fetch --no-tags origin "$release_sha" --depth=1
+          git checkout --detach "$release_sha"
+      - name: Build release asset from resolved release target
+        run: |
+          mkdir -p dist
+          go build -trimpath -o dist/gooo-semantic-regression-bisector ./cmd/gooo-semantic-regression-bisector
+          sha256sum dist/gooo-semantic-regression-bisector > dist/SHA256SUMS
       - name: Create draft release
         run: |
-          if ! gh release view "$VERSION" >/dev/null 2>&1; then
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/releases" \
+          if published="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${VERSION}" 2>/dev/null)"; then
+            test "$(jq -r '.immutable' <<<"$published")" = true
+            echo 'RELEASE_ALREADY_PUBLISHED=true' >> "$GITHUB_ENV"
+            exit 0
+          fi
+          release_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases" --paginate --jq ".[] | select(.tag_name == \"${VERSION}\") | .id" | head -n 1 || true)"
+          if [ -z "$release_id" ]; then
+            release_id="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/releases" \
               -f "tag_name=${VERSION}" \
               -f 'name=gooo semantic regression bisector v0.1.0' \
               -f 'body=Immutable semantic regression bisector release.' \
-              -F draft=true -F prerelease=false >/dev/null
+              -F draft=true -F prerelease=false --jq '.id')"
           fi
+          echo "RELEASE_ID=${release_id}" >> "$GITHUB_ENV"
       - name: Upload assets to draft
-        run: gh release upload "$VERSION" dist/gooo-semantic-regression-bisector dist/SHA256SUMS
+        run: |
+          if [ "${RELEASE_ALREADY_PUBLISHED:-false}" = true ]; then
+            exit 0
+          fi
+          release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}")"
+          for asset in dist/gooo-semantic-regression-bisector dist/SHA256SUMS; do
+            name="$(basename "$asset")"
+            if jq -e --arg name "$name" '.assets[]? | select(.name == $name)' <<<"$release_json" >/dev/null; then
+              continue
+            fi
+            gh release upload "$VERSION" "$asset"
+          done
       - name: Publish release
         run: |
-          release_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${VERSION}" --jq '.id')"
-          gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${release_id}" -F draft=false >/dev/null
+          if [ "${RELEASE_ALREADY_PUBLISHED:-false}" = true ]; then
+            exit 0
+          fi
+          gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" -F draft=false >/dev/null
       - name: Verify public tag, release immutability, and exact assets
         run: |
           ref_json="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${VERSION}")"
           test "$(jq -r '.object.type' <<<"$ref_json")" = tag
           tag_sha="$(jq -r '.object.sha' <<<"$ref_json")"
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_sha}" --jq '.object.sha')" = "$MAIN_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_sha}" --jq '.object.sha')" = "$RELEASE_SHA"
           release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${VERSION}")"
           test "$(jq -r '.tag_name' <<<"$release_json")" = "$VERSION"
           test "$(jq -r '.draft' <<<"$release_json")" = false
