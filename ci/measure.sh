@@ -33,5 +33,10 @@ run_stage test go test -json ./... -count=1
 run_stage conformance go test -json ./internal/conformance -run TestConformance -count=1
 run_stage integration go test -json ./internal/conformance -run TestIntegrationOutputsExactlySixCallerOwnedFiles -count=1
 
-"$(dirname "$0")/test-summary.sh" "$output_dir"
+if ! "$(dirname "$0")/test-summary.sh" "$output_dir"; then
+  overall_rc=1
+fi
+if [ ! -s "$output_dir/test-summary.json" ]; then
+  overall_rc=1
+fi
 exit "$overall_rc"

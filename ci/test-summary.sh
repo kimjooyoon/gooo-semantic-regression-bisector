@@ -12,11 +12,11 @@ executed="0"
 reused="0"
 failed="0"
 if command -v jq >/dev/null 2>&1; then
-  executed="$(jq -s '[.[] | select(.Action == "pass" and .Test != null)] | length' "${json_logs[@]}" 2>/dev/null || echo 0)"
-  reused="$(jq -s '[.[] | select(.Action == "cached" and .Test != null)] | length' "${json_logs[@]}" 2>/dev/null || echo 0)"
-  failed="$(jq -s '[.[] | select(.Action == "fail" and .Test != null)] | length' "${json_logs[@]}" 2>/dev/null || echo 0)"
+  executed="$(jq -s '[.[] | select(.Action == "pass" and .Test != null) | .Test] | unique | length' "${json_logs[@]}" 2>/dev/null || echo 0)"
+  reused="$(jq -s '[.[] | select(.Action == "cached" and .Test != null) | .Test] | unique | length' "${json_logs[@]}" 2>/dev/null || echo 0)"
+  failed="$(jq -s '[.[] | select(.Action == "fail" and .Test != null) | .Test] | unique | length' "${json_logs[@]}" 2>/dev/null || echo 0)"
 fi
-unknown="$(rg -o 'missing_midpoint|stale_receipt|ambiguous_ordering' "$output_dir/conformance.log" 2>/dev/null | wc -l | tr -d ' ')"
+unknown="$(jq -s '[.[] | select(.Test != null) | .Test | select(test("TestConformance/(missing_midpoint|stale_receipt|ambiguous_ordering)$"))] | unique | length' "$output_dir/conformance.log" 2>/dev/null || echo 0)"
 jq -n \
   --argjson total "$total" \
   --argjson selected "$selected" \
