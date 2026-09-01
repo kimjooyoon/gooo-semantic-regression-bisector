@@ -1,0 +1,34 @@
+program semantic_regression_bisector version "0.1.0"
+
+# This embedded copy is the executable contract source for the Go runtime.
+owns candidate_ordering = gooo
+owns admissible_observation = gooo
+owns interval_narrowing = gooo
+owns stop_conditions = gooo
+owns decision_precedence = gooo
+
+rule candidate_ordering = ordinal_then_candidate_id
+rule admissible_observation = schema_and_pinned_release_tag_asset_digests
+rule interval_narrowing = lower_plus_floor_half
+rule stop_conditions = adjacent_known_boundary_or_causal_frontier
+rule decision_precedence = REFUTED_then_UNKNOWN_then_PASS
+
+activity validate_manifest exactly_once
+activity order_candidates exactly_once
+activity ingest_observations exactly_once
+activity normalize_receipts exactly_once
+activity classify_candidates exactly_once
+activity detect_contradiction exactly_once
+activity narrow_interval exactly_once
+activity materialize_frontier exactly_once
+activity emit_receipts exactly_once
+
+canonical_case clean_boundary = CLOSED
+canonical_case replay_boundary = CLOSED
+canonical_case duplicate_equivalent_receipt = CLOSED
+canonical_case missing_midpoint = UNKNOWN
+canonical_case stale_receipt = UNKNOWN
+canonical_case ambiguous_ordering = UNKNOWN
+canonical_case non_monotonic_contradiction = REFUTED
+canonical_case digest_mismatch = REFUTED
+canonical_case false_minimal_boundary = REFUTED
