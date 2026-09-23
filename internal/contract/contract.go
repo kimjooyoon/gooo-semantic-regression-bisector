@@ -84,6 +84,18 @@ func (p Program) Validate() error {
 			return fmt.Errorf("Gooo must own %s", key)
 		}
 	}
+	requiredRules := map[string]string{
+		"candidate_ordering":      "ordinal_then_candidate_id",
+		"admissible_observation": "schema_and_pinned_release_tag_asset_digests",
+		"interval_narrowing":      "lower_plus_floor_half",
+		"stop_conditions":         "adjacent_known_boundary_or_causal_frontier",
+		"decision_precedence":     "REFUTED_then_UNKNOWN_then_PASS",
+	}
+	for name, expected := range requiredRules {
+		if p.Rules[name] != expected {
+			return fmt.Errorf("Gooo rule %s must be %q", name, expected)
+		}
+	}
 	if len(p.Activities) != 9 {
 		return fmt.Errorf("Gooo activity count is %d, want exactly 9", len(p.Activities))
 	}
