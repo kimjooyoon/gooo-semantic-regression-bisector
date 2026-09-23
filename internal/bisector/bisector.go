@@ -366,6 +366,13 @@ func normalizeReceipts(manifest Manifest, ordered []Candidate, observations []Ob
 			SuppliedResult: observation.Result,
 			ReplayOf:       observation.ReplayOf,
 		}
+		if observation.ReceiptID == "" {
+			entry.Admissibility = DigestMismatch
+			entry.FailureKind = "operational"
+			entry.Reason = "receipt id is required for immutable observation identity"
+			ledger = append(ledger, entry)
+			continue
+		}
 		if observation.ReceiptID != "" && seenReceiptIDs[observation.ReceiptID] {
 			entry.Admissibility = DuplicateReceipt
 			entry.Reason = "receipt ID was already ingested and is not counted twice"

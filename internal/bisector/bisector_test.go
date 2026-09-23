@@ -36,3 +36,14 @@ func TestDigestAndObjectPinValidation(t *testing.T) {
 		t.Fatal("expected valid object id")
 	}
 }
+
+func TestEmptyReceiptIDIsNotAdmissible(t *testing.T) {
+	ledger := normalizeReceipts(
+		Manifest{Candidates: []Candidate{{ID: "candidate"}}},
+		[]Candidate{{ID: "candidate"}},
+		[]Observation{{CandidateID: "candidate", Result: ResultPass}},
+	)
+	if len(ledger) != 1 || ledger[0].Admissibility != DigestMismatch {
+		t.Fatalf("empty receipt id was admitted: %#v", ledger)
+	}
+}
