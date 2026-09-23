@@ -26,6 +26,10 @@ func Source() string {
 }
 
 func Load() (Program, error) {
+	return parse(source)
+}
+
+func parse(source string) (Program, error) {
 	p := Program{
 		Ownership:      map[string]string{},
 		Rules:          map[string]string{},
@@ -33,6 +37,7 @@ func Load() (Program, error) {
 	}
 	hash := sha256.Sum256([]byte(source))
 	p.SourceDigest = "sha256:" + hex.EncodeToString(hash[:])
+	seenProgram := false
 	for lineNumber, raw := range strings.Split(source, "\n") {
 		line := strings.TrimSpace(raw)
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -40,15 +45,25 @@ func Load() (Program, error) {
 		}
 		fields := strings.Fields(line)
 		if len(fields) >= 4 && fields[0] == "program" && fields[2] == "version" {
+			if seenProgram {
+				return Program{}, fmt.Errorf("contract line %d duplicates program declaration", lineNumber+1)
+			}
+			seenProgram = true
 			p.Name = fields[1]
 			p.Version = strings.Trim(fields[3], "\"")
 			continue
 		}
 		if len(fields) == 4 && fields[0] == "owns" && fields[2] == "=" {
+			if _, exists := p.Ownership[fields[1]]; exists {
+				return Program{}, fmt.Errorf("contract line %d duplicates ownership declaration %q", lineNumber+1, fields[1])
+			}
 			p.Ownership[fields[1]] = fields[3]
 			continue
 		}
 		if len(fields) >= 4 && fields[0] == "rule" && fields[2] == "=" {
+			if _, exists := p.Rules[fields[1]]; exists {
+				return Program{}, fmt.Errorf("contract line %d duplicates rule declaration %q", lineNumber+1, fields[1])
+			}
 			p.Rules[fields[1]] = strings.Join(fields[3:], " ")
 			continue
 		}
@@ -57,6 +72,9 @@ func Load() (Program, error) {
 			continue
 		}
 		if len(fields) == 4 && fields[0] == "canonical_case" && fields[2] == "=" {
+			if _, exists := p.CanonicalCases[fields[1]]; exists {
+				return Program{}, fmt.Errorf("contract line %d duplicates canonical case %q", lineNumber+1, fields[1])
+			}
 			p.CanonicalCases[fields[1]] = fields[3]
 			continue
 		}
