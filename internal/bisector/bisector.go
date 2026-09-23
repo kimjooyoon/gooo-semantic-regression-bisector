@@ -355,6 +355,7 @@ func normalizeReceipts(manifest Manifest, ordered []Candidate, observations []Ob
 		candidates[candidate.ID] = candidate
 	}
 	seen := map[string]bool{}
+	seenReceiptIDs := map[string]bool{}
 	ledger := make([]LedgerEntry, 0, len(observations))
 	for index, observation := range observations {
 		entry := LedgerEntry{
@@ -364,6 +365,15 @@ func normalizeReceipts(manifest Manifest, ordered []Candidate, observations []Ob
 			EquivalenceKey: observation.EquivalenceKey,
 			SuppliedResult: observation.Result,
 			ReplayOf:       observation.ReplayOf,
+		}
+		if observation.ReceiptID != "" && seenReceiptIDs[observation.ReceiptID] {
+			entry.Admissibility = DuplicateReceipt
+			entry.Reason = "receipt ID was already ingested and is not counted twice"
+			ledger = append(ledger, entry)
+			continue
+		}
+		if observation.ReceiptID != "" {
+			seenReceiptIDs[observation.ReceiptID] = true
 		}
 		candidate, exists := candidates[observation.CandidateID]
 		if !exists {
