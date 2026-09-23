@@ -26,6 +26,10 @@ func Source() string {
 }
 
 func Load() (Program, error) {
+	return parseSource(source)
+}
+
+func parseSource(source string) (Program, error) {
 	p := Program{
 		Ownership:      map[string]string{},
 		Rules:          map[string]string{},
@@ -40,15 +44,24 @@ func Load() (Program, error) {
 		}
 		fields := strings.Fields(line)
 		if len(fields) >= 4 && fields[0] == "program" && fields[2] == "version" {
+			if p.Name != "" || p.Version != "" {
+				return Program{}, fmt.Errorf("contract line %d duplicates the program declaration", lineNumber+1)
+			}
 			p.Name = fields[1]
 			p.Version = strings.Trim(fields[3], "\"")
 			continue
 		}
 		if len(fields) == 4 && fields[0] == "owns" && fields[2] == "=" {
+			if _, exists := p.Ownership[fields[1]]; exists {
+				return Program{}, fmt.Errorf("contract line %d duplicates owns declaration %q", lineNumber+1, fields[1])
+			}
 			p.Ownership[fields[1]] = fields[3]
 			continue
 		}
 		if len(fields) >= 4 && fields[0] == "rule" && fields[2] == "=" {
+			if _, exists := p.Rules[fields[1]]; exists {
+				return Program{}, fmt.Errorf("contract line %d duplicates rule declaration %q", lineNumber+1, fields[1])
+			}
 			p.Rules[fields[1]] = strings.Join(fields[3:], " ")
 			continue
 		}
@@ -57,6 +70,9 @@ func Load() (Program, error) {
 			continue
 		}
 		if len(fields) == 4 && fields[0] == "canonical_case" && fields[2] == "=" {
+			if _, exists := p.CanonicalCases[fields[1]]; exists {
+				return Program{}, fmt.Errorf("contract line %d duplicates canonical_case declaration %q", lineNumber+1, fields[1])
+			}
 			p.CanonicalCases[fields[1]] = fields[3]
 			continue
 		}
